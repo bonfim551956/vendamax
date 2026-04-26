@@ -635,32 +635,8 @@ function daysInMonth(y,m){ return new Date(y,m+1,0).getDate(); }
 function fmtBRL(v){ return Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
 
 // ─── AUTH STATE ──────────────────────────────────
-onAuthStateChanged(auth, async user => {
-  if (user) {
-    currentUser = user;
-    const snap = await getDoc(doc(db,'usuarios',user.uid));
-    if (snap.exists()) {
-      const data = snap.data();
-      currentProfile = data.perfil || 'vendedor';
-      document.getElementById('t-name').textContent = data.nome || user.email;
-    } else {
-      currentProfile = 'vendedor';
-      document.getElementById('t-name').textContent = user.email;
-    }
-    document.getElementById('screen-login').classList.remove('active');
-    document.getElementById('screen-app').classList.add('active');
-    if (currentProfile === 'gestor') {
-      document.getElementById('tab-mgr').style.display = '';
-      document.getElementById('tab-adm').style.display = '';
-    }
-    await loadMonthData();
-    renderAll();
-  } else {
-    currentUser = null;
-    document.getElementById('screen-login').classList.add('active');
-    document.getElementById('screen-app').classList.remove('active');
-  }
-});
+// Auth state handled by doLogin directly
+// onAuthStateChanged removed to avoid reCAPTCHA blocking issues
 
 // ─── LOGIN / LOGOUT ──────────────────────────────
 // Converte usuário simples para e-mail interno
@@ -678,8 +654,9 @@ window.doLogin = async function() {
   const load  = document.getElementById('l-loading');
   err.style.display  = 'none';
   load.style.display = 'block';
+
   try {
-    // Usa REST API diretamente para evitar bloqueio do reCAPTCHA Enterprise
+    // Step 1: Authenticate via REST API
     const apiKey = firebaseConfig.apiKey;
     const res = await fetch(
       'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' + apiKey,
@@ -690,35 +667,39 @@ window.doLogin = async function() {
       }
     );
     const data = await res.json();
-    if (!res.ok) {
-      const msg = data.error?.message || 'ERRO_DESCONHECIDO';
-      throw new Error(msg);
+    if (!res.ok) throw new Error(data.error?.message || 'LOGIN_FAILED');
+
+    // Step 2: Update Firebase auth state with the token from REST
+    // This allows Firestore to work with security rules
+    window._authToken = data.idToken;
+    window._authUid = data.localId;
+    
+    // Load user profile from Firestore
+    const uid = data.localId;
+    const snap = await getDoc(doc(db,'usuarios', uid));
+    
+    load.style.display = 'none';
+    
+    currentUser = { uid, email: data.email };
+    if (snap.exists()) {
+      const udata = snap.data();
+      currentProfile = udata.perfil || 'vendedor';
+      document.getElementById('t-name').textContent = udata.nome || raw;
+    } else {
+      currentProfile = 'vendedor';
+      document.getElementById('t-name').textContent = raw;
     }
-    // Login bem sucedido via REST — agora faz login no SDK também para o Firestore funcionar
-    try {
-      await signInWithEmailAndPassword(auth, email, pass);
-    } catch(e2) {
-      // Se o SDK falhar mas REST funcionou, carrega manualmente
-      load.style.display = 'none';
-      currentUser = { uid: data.localId, email: data.email };
-      const snap = await getDoc(doc(db,'usuarios', data.localId));
-      if (snap.exists()) {
-        const udata = snap.data();
-        currentProfile = udata.perfil || 'vendedor';
-        document.getElementById('t-name').textContent = udata.nome || data.email;
-      } else {
-        currentProfile = 'vendedor';
-        document.getElementById('t-name').textContent = data.email;
-      }
-      document.getElementById('screen-login').classList.remove('active');
-      document.getElementById('screen-app').classList.add('active');
-      if (currentProfile === 'gestor') {
-        document.getElementById('tab-mgr').style.display = '';
-        document.getElementById('tab-adm').style.display = '';
-      }
-      await loadMonthData();
-      renderAll();
+
+    // Step 3: Show app
+    document.getElementById('screen-login').classList.remove('active');
+    document.getElementById('screen-app').classList.add('active');
+    if (currentProfile === 'gestor') {
+      document.getElementById('tab-mgr').style.display = '';
+      document.getElementById('tab-adm').style.display = '';
     }
+    await loadMonthData();
+    renderAll();
+
   } catch(e) {
     load.style.display = 'none';
     err.textContent = 'Erro: ' + (e.message || JSON.stringify(e));
