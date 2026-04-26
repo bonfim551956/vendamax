@@ -669,26 +669,32 @@ window.doLogin = async function() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error?.message || 'LOGIN_FAILED');
 
-    // Step 2: Update Firebase auth state with the token from REST
-    // This allows Firestore to work with security rules
-    window._authToken = data.idToken;
-    window._authUid = data.localId;
-    
-    // Load user profile from Firestore
+    // Step 2: Load user profile via Firestore REST API (no SDK auth needed)
     const uid = data.localId;
-    const snap = await getDoc(doc(db,'usuarios', uid));
-    
+    const token = data.idToken;
+    window._authToken = token;
+    window._authUid = uid;
+
+    let userName = raw;
+    let userProfile = 'vendedor';
+
+    try {
+      const fsRes = await fetch(
+        `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/usuarios/${uid}`,
+        { headers: { 'Authorization': 'Bearer ' + token } }
+      );
+      if (fsRes.ok) {
+        const fsData = await fsRes.json();
+        const fields = fsData.fields || {};
+        userProfile = fields.perfil?.stringValue || 'vendedor';
+        userName = fields.nome?.stringValue || raw;
+      }
+    } catch(e3) { console.log('profile load error:', e3); }
+
     load.style.display = 'none';
-    
     currentUser = { uid, email: data.email };
-    if (snap.exists()) {
-      const udata = snap.data();
-      currentProfile = udata.perfil || 'vendedor';
-      document.getElementById('t-name').textContent = udata.nome || raw;
-    } else {
-      currentProfile = 'vendedor';
-      document.getElementById('t-name').textContent = raw;
-    }
+    currentProfile = userProfile;
+    document.getElementById('t-name').textContent = userName;
 
     // Step 3: Show app
     document.getElementById('screen-login').classList.remove('active');
