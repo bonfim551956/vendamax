@@ -697,8 +697,13 @@ window.doLogin = async function() {
     document.getElementById('t-name').textContent = userName;
 
     // Step 3: Show app
-    document.getElementById('screen-login').classList.remove('active');
-    document.getElementById('screen-app').classList.add('active');
+    // Transition to app
+    const loginEl = document.getElementById('screen-login');
+    const appEl   = document.getElementById('screen-app');
+    loginEl.style.display = 'none';
+    loginEl.classList.remove('active');
+    appEl.style.display = 'block';
+    appEl.classList.add('active');
     if (currentProfile === 'gestor') {
       document.getElementById('tab-mgr').style.display = '';
       document.getElementById('tab-adm').style.display = '';
