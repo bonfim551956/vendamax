@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VendaMax · Painel de Vendas</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+<!-- ═══════════════════════════════════════════════════════
+     INSTRUÇÕES DE CONFIGURAÇÃO DO FIREBASE
+     ═══════════════════════════════════════════════════════
+  1. Acesse: https://console.firebase.google.com
+  2. Clique em "Adicionar projeto" → dê um nome → clique em Continuar
+  3. Desative Google Analytics (opcional) → "Criar projeto"
+  4. No menu lateral clique em "Firestore Database" → "Criar banco de dados"
+     → Escolha "Modo de produção" → Selecione a região → "Ativar"
+  5. Vá em "Regras" e substitua por:
+     rules_version = '2';
+     service cloud.firestore {
+       match /databases/{database}/documents {
+         match /usuarios/{uid} {
+           allow read, write: if request.auth.uid == uid || 
+             get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil == 'gestor';
+         }
+         match /lancamentos/{docId} {
+           allow read: if request.auth != null && (
+             resource.data.uid == request.auth.uid ||
+             get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.perfil == 'gestor'
+           );
+           allow write: if request.auth != null && resource.data.uid == request.auth.uid;
+           allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
+         }
+         match /metas/{docId} {
+           allow read, write: if request.auth != null;
+         }
+       }
+     }
+  6. Vá em "Authentication" → "Começar" → ative "E-mail/senha"
+  7. Clique no ícone "</>" (Web) para registrar o app
+  8. Copie o objeto firebaseConfig e cole SUBSTITUINDO o bloco abaixo
+  ══════════════════════════════════════════════════════════ -->
+
+<style>
+  :root {
+    --bg: #071a19;
+    --surface: #0d2422;
+    --surface2: #112e2c;
+    --border: #1a3f3d;
+    --border2: #1f4e4b;
+    --accent: #2FA7A0;
+    --accent-dark: #238B86;
+    --accent2: #F59A2A;
+    --accent3: #2FA7A0;
+    --green: #2FA7A0;
+    --red: #ff4757;
+    --yellow: #F59A2A;
+    --text: #FFFFFF;
+    --muted: #4a7a78;
+    --muted2: #6aa8a5;
+    --card: #0d2422;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden;}
+
+  /* ── NOISE TEXTURE ── */
+  body::before{
+    content:'';position:fixed;inset:0;
+    background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events:none;z-index:0;opacity:0.4;
+  }
+
+  /* ── SCREENS ── */
+  .screen{display:none;position:relative;z-index:1;}
+  .screen.active{display:block;}
+  #screen-login{display:flex;min-height:100vh;align-items:center;justify-content:center;}
+  #screen-login.active{display:flex;}
+
+  /* ── LOGIN ── */
+  .login-wrap{
+    width:100%;max-width:420px;padding:20px;
+    animation:fadeUp .5s ease;
+  }
+  .login-card{
+    background:var(--surface);border:1px solid var(--border2);
+    border-radius:24px;padding:48px 40px;
+    box-shadow:0 40px 80px rgba(0,0,0,.5);
+  }
+  .login-logo{
+    font-family:'Syne',sans-serif;font-size:32px;font-weight:800;
+    color:var(--accent);letter-spacing:-1px;margin-bottom:4px;
+  }
+  .login-logo span{color:var(--accent2);}
+  .login-tagline{
+    font-family:'DM Mono',monospace;font-size:11px;letter-spacing:2px;
+    text-transform:uppercase;color:var(--muted);margin-bottom:40px;
+  }
+  .field{margin-bottom:20px;}
+  .field label{
+    display:block;font-family:'DM Mono',monospace;font-size:10px;
+    letter-spacing:2px;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;
+  }
+  .field input{
+    width:100%;background:var(--surface2);border:1px solid var(--border2);
+    border-radius:12px;padding:13px 16px;color:var(--text);font-size:15px;
+    font-family:'DM Sans',sans-serif;outline:none;transition:border-color .2s,box-shadow .2s;
+  }
+  .field input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(47,167,160,.15);}
+  .btn-primary{
+    width:100%;background:var(--accent);color:#080a0f;border:none;
+    border-radius:12px;padding:15px;font-size:15px;font-weight:700;
+    font-family:'Syne',sans-serif;cursor:pointer;transition:all .2s;letter-spacing:.3px;
+  }
+  .btn-primary:hover{opacity:.9;transform:translateY(-1px);box-shadow:0 8px 24px rgba(47,167,160,.3);}
+  .btn-primary:active{transform:translateY(0);}
+  .login-hint{font-size:11px;color:var(--muted);margin-top:20px;font-family:'DM Mono',monospace;text-align:center;line-height:1.8;}
+  .error-box{
+    background:rgba(255,71,87,.1);border:1px solid rgba(255,71,87,.3);
+    border-radius:10px;padding:11px 14px;font-size:13px;color:var(--red);
+    margin-top:14px;display:none;font-family:'DM Mono',monospace;
+  }
+  .loading-box{
+    background:rgba(47,167,160,.08);border:1px solid rgba(232,255,71,.15);
+    border-radius:10px;padding:11px 14px;font-size:13px;color:var(--accent);
+    margin-top:14px;display:none;font-family:'DM Mono',monospace;
+    animation:blink 1.2s infinite;
+  }
+  @keyframes blink{0%,100%{opacity:1;}50%{opacity:.5;}}
+
+  /* ── TOPBAR ── */
+  .topbar{
+    background:rgba(14,17,23,.95);backdrop-filter:blur(12px);
+    border-bottom:1px solid var(--border);padding:0 32px;height:58px;
+    display:flex;align-items:center;justify-content:space-between;
+    position:sticky;top:0;z-index:100;
+  }
+  .topbar-brand{font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--accent);}
+  .topbar-brand span{color:var(--accent2);font-weight:400;}
+  .topbar-right{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+  .update-pill{
+    display:flex;align-items:center;gap:7px;font-size:11px;
+    font-family:'DM Mono',monospace;padding:5px 13px;border-radius:20px;
+    border:1px solid var(--border2);transition:all .3s;
+  }
+  .update-pill.ok{border-color:rgba(61,255,160,.35);background:rgba(61,255,160,.07);color:var(--green);}
+  .update-pill.late{border-color:rgba(255,71,87,.35);background:rgba(255,71,87,.07);color:var(--red);}
+  .update-pill .dot{width:6px;height:6px;border-radius:50%;background:currentColor;animation:pulse 2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+  .topbar-user{font-size:13px;color:var(--muted2);font-family:'DM Mono',monospace;}
+  .topbar-user strong{color:var(--text);}
+  .btn-sm{
+    background:var(--surface2);border:1px solid var(--border2);color:var(--muted2);
+    padding:6px 14px;border-radius:8px;font-size:11px;font-family:'DM Mono',monospace;
+    cursor:pointer;transition:all .2s;letter-spacing:.5px;text-transform:uppercase;
+  }
+  .btn-sm:hover{border-color:var(--red);color:var(--red);}
+  .btn-tab{
+    background:transparent;border:1px solid var(--border2);color:var(--muted2);
+    padding:6px 16px;border-radius:8px;font-size:11px;font-family:'DM Mono',monospace;
+    cursor:pointer;transition:all .2s;letter-spacing:.5px;text-transform:uppercase;
+  }
+  .btn-tab.active{background:var(--accent);border-color:var(--accent);color:#080a0f;font-weight:700;}
+  .btn-tab:hover:not(.active){border-color:var(--accent);color:var(--accent);}
+
+  /* ── MAIN ── */
+  .main{max-width:1320px;margin:0 auto;padding:32px 32px 80px;}
+
+  /* ── MONTH NAV ── */
+  .month-nav{display:flex;align-items:center;gap:14px;margin-bottom:28px;}
+  .month-nav button{
+    background:var(--surface);border:1px solid var(--border2);color:var(--text);
+    width:34px;height:34px;border-radius:9px;cursor:pointer;font-size:16px;
+    display:flex;align-items:center;justify-content:center;transition:all .2s;
+  }
+  .month-nav button:hover{border-color:var(--accent);color:var(--accent);}
+  .month-nav .cur{font-family:'Syne',sans-serif;font-size:20px;font-weight:700;}
+
+  /* ── SCORE BANNER ── */
+  .score-banner{
+    background:linear-gradient(135deg,var(--surface) 0%,#0a0f1a 100%);
+    border:1px solid var(--border2);border-radius:20px;padding:28px 32px;
+    margin-bottom:24px;display:flex;align-items:center;
+    justify-content:space-between;gap:24px;flex-wrap:wrap;
+    position:relative;overflow:hidden;
+  }
+  .score-banner::after{
+    content:'';position:absolute;right:-60px;top:-60px;width:250px;height:250px;
+    border-radius:50%;background:radial-gradient(circle,rgba(47,167,160,.08) 0%,transparent 70%);
+    pointer-events:none;
+  }
+  .score-info h2{font-family:'Syne',sans-serif;font-size:13px;font-weight:600;color:var(--muted2);letter-spacing:.5px;margin-bottom:4px;}
+  .score-info p{font-size:12px;color:var(--muted);font-family:'DM Mono',monospace;}
+  .score-display{display:flex;align-items:center;gap:20px;}
+  .score-ring{
+    width:88px;height:88px;border-radius:50%;border:3px solid var(--accent);
+    background:rgba(47,167,160,.08);display:flex;flex-direction:column;
+    align-items:center;justify-content:center;flex-shrink:0;
+  }
+  .score-ring .sn{font-family:'Syne',sans-serif;font-size:32px;font-weight:800;color:var(--accent);line-height:1;}
+  .score-ring .sd{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);}
+  .score-breakdown{display:flex;flex-direction:column;gap:7px;}
+  .sbi{display:flex;justify-content:space-between;gap:20px;font-size:11px;font-family:'DM Mono',monospace;color:var(--muted2);}
+  .sbi strong{color:var(--text);}
+  .verdict{
+    font-family:'Syne',sans-serif;font-size:13px;font-weight:700;
+    padding:7px 18px;border-radius:20px;letter-spacing:.3px;flex-shrink:0;
+  }
+  .v-great{background:rgba(61,255,160,.12);color:var(--green);}
+  .v-ok{background:rgba(255,200,71,.12);color:var(--yellow);}
+  .v-bad{background:rgba(255,71,87,.12);color:var(--red);}
+
+  /* ── PROGRESS ── */
+  .progress-card{
+    background:var(--surface);border:1px solid var(--border2);
+    border-radius:16px;padding:22px 24px;margin-bottom:24px;
+  }
+  .progress-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;}
+  .progress-head h3{font-family:'Syne',sans-serif;font-size:14px;font-weight:600;}
+  .progress-pct{font-family:'DM Mono',monospace;font-size:24px;color:var(--accent);}
+  .pbar{height:7px;background:var(--border2);border-radius:10px;overflow:hidden;margin-bottom:10px;}
+  .pfill{height:100%;border-radius:10px;background:linear-gradient(90deg,var(--accent-dark),var(--accent));transition:width 1s cubic-bezier(.4,0,.2,1);}
+  .plabels{display:flex;justify-content:space-between;font-size:11px;font-family:'DM Mono',monospace;color:var(--muted2);}
+
+  /* ── KPI GRID ── */
+  .section-label{
+    font-family:'DM Mono',monospace;font-size:10px;letter-spacing:2.5px;
+    text-transform:uppercase;color:var(--muted);margin-bottom:14px;margin-top:28px;
+    display:flex;align-items:center;gap:10px;
+  }
+  .section-label::after{content:'';flex:1;height:1px;background:var(--border);}
+  .kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:14px;}
+  .kpi-card{
+    background:var(--surface);border:1px solid var(--border);border-radius:16px;
+    padding:18px 20px;position:relative;overflow:hidden;transition:border-color .2s,transform .2s;
+  }
+  .kpi-card:hover{border-color:var(--border2);transform:translateY(-2px);}
+  .kpi-card::before{
+    content:'';position:absolute;top:0;left:0;right:0;height:2px;
+    background:linear-gradient(90deg,transparent,rgba(47,167,160,.4),transparent);
+    opacity:0;transition:opacity .2s;
+  }
+  .kpi-card:hover::before{opacity:1;}
+  .kpi-lbl{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:1.8px;text-transform:uppercase;color:var(--muted);margin-bottom:10px;}
+  .kpi-val{font-family:'Syne',sans-serif;font-size:21px;font-weight:700;color:var(--text);line-height:1;}
+  .kpi-sub{font-size:11px;color:var(--muted2);margin-top:6px;font-family:'DM Mono',monospace;}
+  .kpi-badge{
+    position:absolute;top:14px;right:14px;font-size:9px;
+    font-family:'DM Mono',monospace;padding:3px 9px;border-radius:10px;letter-spacing:.5px;
+  }
+  .bg-green{background:rgba(61,255,160,.1);color:var(--green);}
+  .bg-red{background:rgba(255,71,87,.1);color:var(--red);}
+  .bg-yellow{background:rgba(255,200,71,.1);color:var(--yellow);}
+
+  /* ── TABLE ── */
+  .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:24px;}
+  .table-head-row{display:flex;align-items:center;justify-content:space-between;padding:16px 22px;border-bottom:1px solid var(--border);}
+  .table-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;}
+  table{width:100%;border-collapse:collapse;}
+  thead th{
+    padding:9px 14px;text-align:left;font-size:9px;font-family:'DM Mono',monospace;
+    letter-spacing:2px;text-transform:uppercase;color:var(--muted);
+    background:var(--surface2);border-bottom:1px solid var(--border);
+  }
+  tbody tr{border-bottom:1px solid rgba(28,32,48,.5);transition:background .15s;}
+  tbody tr:last-child{border-bottom:none;}
+  tbody tr:hover{background:var(--surface2);}
+  tbody td{padding:9px 14px;font-size:12px;font-family:'DM Mono',monospace;color:var(--muted2);}
+  .td-hi{color:var(--green);}
+  .td-zero{color:var(--muted);}
+  .td-today{background:rgba(232,255,71,.03);}
+
+  /* ── FORM ── */
+  .form-card{background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:28px;margin-bottom:24px;}
+  .form-card h3{font-family:'Syne',sans-serif;font-size:16px;font-weight:700;margin-bottom:6px;}
+  .form-card p{font-size:13px;color:var(--muted2);margin-bottom:24px;}
+  .form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:16px;margin-bottom:20px;}
+  .fg label{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);display:block;margin-bottom:7px;}
+  .fg input,.fg select{
+    width:100%;background:var(--surface2);border:1px solid var(--border2);
+    border-radius:10px;padding:11px 13px;color:var(--text);font-size:14px;
+    font-family:'DM Mono',monospace;outline:none;transition:border-color .2s;
+  }
+  .fg input:focus,.fg select:focus{border-color:var(--accent);}
+  .fg select option{background:var(--surface2);}
+  .btn-save{
+    background:var(--accent);color:#FFFFFF;border:none;border-radius:10px;
+    padding:12px 28px;font-size:14px;font-weight:700;font-family:'Syne',sans-serif;
+    cursor:pointer;transition:all .2s;
+  }
+  .btn-save:hover{opacity:.9;transform:translateY(-1px);}
+  .save-ok{
+    display:inline-flex;align-items:center;gap:8px;font-size:12px;
+    font-family:'DM Mono',monospace;color:var(--green);margin-left:16px;
+    opacity:0;transition:opacity .3s;
+  }
+  .save-ok.show{opacity:1;}
+
+  /* ── MANAGER PANEL ── */
+  .manager-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;margin-top:24px;}
+  .seller-card{
+    background:var(--surface);border:1px solid var(--border);border-radius:16px;
+    padding:20px;transition:border-color .2s,transform .2s;cursor:pointer;
+    position:relative;overflow:hidden;
+  }
+  .seller-card:hover{border-color:var(--border2);transform:translateY(-2px);}
+  .seller-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+  .seller-avatar{
+    width:40px;height:40px;border-radius:50%;background:var(--surface2);
+    border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;
+    font-family:'Syne',sans-serif;font-size:16px;font-weight:700;color:var(--accent);flex-shrink:0;
+  }
+  .seller-info{flex:1;margin-left:12px;}
+  .seller-name{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;}
+  .seller-email{font-size:11px;color:var(--muted2);font-family:'DM Mono',monospace;}
+  .seller-score{
+    width:44px;height:44px;border-radius:50%;border:2px solid var(--accent);
+    background:rgba(47,167,160,.08);display:flex;flex-direction:column;
+    align-items:center;justify-content:center;flex-shrink:0;
+  }
+  .seller-score .n{font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:var(--accent);line-height:1;}
+  .seller-score .d{font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);}
+  .seller-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:8px;}
+  .ss-item{text-align:center;}
+  .ss-val{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:var(--text);}
+  .ss-lbl{font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:.5px;margin-top:2px;}
+  .seller-bar{height:4px;background:var(--border);border-radius:4px;overflow:hidden;margin-top:14px;}
+  .seller-bar-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--accent-dark),var(--accent));transition:width .8s ease;}
+  .seller-upd{
+    position:absolute;top:14px;right:14px;
+    width:8px;height:8px;border-radius:50%;
+  }
+  .upd-ok{background:var(--green);box-shadow:0 0 6px var(--green);}
+  .upd-late{background:var(--red);box-shadow:0 0 6px var(--red);}
+
+  /* ── MANAGER SUMMARY ── */
+  .mgr-summary{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-bottom:8px;}
+  .mgr-kpi{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;}
+  .mgr-kpi .mk-l{font-family:'DM Mono',monospace;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+  .mgr-kpi .mk-v{font-family:'Syne',sans-serif;font-size:20px;font-weight:700;color:var(--text);}
+  .mgr-kpi .mk-s{font-size:11px;color:var(--muted2);margin-top:4px;font-family:'DM Mono',monospace;}
+
+  /* ── MODAL ── */
+  .modal-bg{
+    display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);
+    backdrop-filter:blur(4px);z-index:200;align-items:center;justify-content:center;padding:20px;
+  }
+  .modal-bg.open{display:flex;}
+  .modal{
+    background:var(--surface);border:1px solid var(--border2);border-radius:20px;
+    padding:32px;width:100%;max-width:600px;max-height:80vh;overflow-y:auto;
+    animation:fadeUp .3s ease;
+  }
+  .modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;}
+  .modal-head h2{font-family:'Syne',sans-serif;font-size:18px;font-weight:700;}
+  .modal-close{background:var(--surface2);border:1px solid var(--border2);color:var(--muted2);width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;}
+  .modal-close:hover{border-color:var(--red);color:var(--red);}
+
+  /* ── ADMIN USERS PANEL ── */
+  .users-table{width:100%;border-collapse:collapse;}
+  .users-table th{padding:9px 14px;text-align:left;font-size:9px;font-family:'DM Mono',monospace;letter-spacing:2px;text-transform:uppercase;color:var(--muted);background:var(--surface2);border-bottom:1px solid var(--border);}
+  .users-table td{padding:9px 14px;font-size:13px;border-bottom:1px solid rgba(28,32,48,.5);}
+  .users-table tr:last-child td{border-bottom:none;}
+  .badge-perfil{font-family:'DM Mono',monospace;font-size:10px;padding:3px 10px;border-radius:8px;}
+  .bp-gestor{background:rgba(232,255,71,.1);color:var(--accent);}
+  .bp-vendedor{background:rgba(71,200,255,.1);color:var(--accent3);}
+  .btn-del{background:rgba(255,71,87,.1);border:1px solid rgba(255,71,87,.2);color:var(--red);padding:4px 10px;border-radius:6px;font-size:11px;font-family:'DM Mono',monospace;cursor:pointer;}
+  .btn-del:hover{background:rgba(255,71,87,.2);}
+
+  /* ── ADD USER FORM ── */
+  .add-user-form{background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:20px;margin-top:20px;}
+  .add-user-form h4{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;margin-bottom:16px;color:var(--muted2);}
+  .add-user-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:14px;}
+
+  @keyframes fadeUp{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
+  @media(max-width:600px){
+    .main{padding:16px 16px 60px;}
+    .topbar{padding:0 16px;}
+    .login-card{padding:32px 24px;}
+    .score-banner{flex-direction:column;}
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════ LOGIN ══════════ -->
+<div id="screen-login" class="screen active">
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-logo">Venda<span>Max</span></div>
+      <div class="login-tagline">Painel de Desempenho · 2026</div>
+      <div class="field">
+        <label>Usuário</label>
+        <input type="text" id="l-email" placeholder="ex: diego" autocomplete="username">
+      </div>
+      <div class="field">
+        <label>Senha</label>
+        <input type="password" id="l-pass" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <button class="btn-primary" onclick="doLogin()">Entrar</button>
+      <div class="loading-box" id="l-loading">🔄 Autenticando...</div>
+      <div class="error-box" id="l-error">Usuário ou senha incorretos.</div>
+      <div class="login-hint">
+        💡 Digite seu usuário e senha.<br>Gestor cadastra novos usuários pelo painel.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ APP ══════════ -->
+<div id="screen-app" class="screen">
+  <div class="topbar">
+    <div class="topbar-brand">Venda<span>Max</span></div>
+    <div class="topbar-right">
+      <div class="update-pill late" id="upd-pill">
+        <div class="dot"></div><span id="upd-label">—</span>
+      </div>
+      <div id="tab-wrap" style="display:flex;gap:6px;">
+        <button class="btn-tab active" id="tab-meu" onclick="switchTab('meu')">Meu Painel</button>
+        <button class="btn-tab" id="tab-mgr" onclick="switchTab('mgr')" style="display:none;">Equipe</button>
+        <button class="btn-tab" id="tab-adm" onclick="switchTab('adm')" style="display:none;">Usuários</button>
+      </div>
+      <div class="topbar-user">Olá, <strong id="t-name">—</strong></div>
+      <button class="btn-sm" onclick="doLogout()">Sair</button>
+    </div>
+  </div>
+
+  <!-- ── MEU PAINEL ── -->
+  <div class="main" id="tab-meu-panel">
+    <div class="month-nav">
+      <button onclick="changeMonth(-1)">‹</button>
+      <div class="cur" id="month-label">—</div>
+      <button onclick="changeMonth(1)">›</button>
+    </div>
+    <div class="score-banner">
+      <div class="score-info">
+        <h2>Nota de Preenchimento</h2>
+        <p id="score-period">—</p>
+      </div>
+      <div class="score-display">
+        <div class="score-ring">
+          <div class="sn" id="sc-num">—</div>
+          <div class="sd">/10</div>
+        </div>
+        <div class="score-breakdown">
+          <div class="sbi">Dias preenchidos <strong id="sb-fill">—</strong></div>
+          <div class="sbi">Meta atingida (dias) <strong id="sb-meta">—</strong></div>
+          <div class="sbi">Atualizado hoje <strong id="sb-today">—</strong></div>
+        </div>
+      </div>
+      <div class="verdict" id="sc-verdict">—</div>
+    </div>
+    <div class="progress-card">
+      <div class="progress-head">
+        <h3>Meta do Mês</h3>
+        <div class="progress-pct" id="p-pct">—</div>
+      </div>
+      <div class="pbar"><div class="pfill" id="p-bar" style="width:0%"></div></div>
+      <div class="plabels">
+        <span id="p-vendido">—</span>
+        <span id="p-meta">—</span>
+      </div>
+    </div>
+    <div class="section-label">Indicadores</div>
+    <div class="kpi-grid" id="kpi-grid"></div>
+    <div class="section-label">Lançamentos Diários</div>
+    <div class="table-wrap">
+      <div class="table-head-row"><div class="table-title">Histórico do Mês</div></div>
+      <table><thead><tr>
+        <th>Dia</th><th>Data</th><th>Vendas</th><th>Qtd</th><th>Comissão</th><th>Ticket</th><th>Status</th>
+      </tr></thead><tbody id="t-body"></tbody></table>
+    </div>
+    <div class="section-label">Lançar / Editar</div>
+    <div class="form-card">
+      <h3>Atualizar Dia</h3>
+      <p>Preencha os dados do dia selecionado. Ao salvar, marca como atualizado. <strong style="color:var(--accent);">Antes das 11h</strong>, lançar o dia anterior também conta como atualizado.</p>
+      <div class="form-grid">
+        <div class="fg"><label>Dia do Mês</label><input type="number" id="f-day" min="1" max="31" placeholder="Ex: 14" oninput="loadDay()"></div>
+        <div class="fg"><label>Vendas (R$)</label><input type="number" id="f-vend" min="0" step="0.01" placeholder="0.00"></div>
+        <div class="fg"><label>Qtd. Vendas</label><input type="number" id="f-qtd" min="0" placeholder="0"></div>
+        <div class="fg"><label>Comissão (R$)</label><input type="number" id="f-com" min="0" step="0.01" placeholder="0.00"></div>
+        <div class="fg"><label>Meta Mensal (R$)</label><input type="number" id="f-meta" min="0" step="0.01" placeholder="55000.00"></div>
+        <div class="fg"><label>Dias no Ciclo</label><input type="number" id="f-ciclo" min="1" max="31" placeholder="26"></div>
+      </div>
+      <button class="btn-save" onclick="saveDay()">💾 Salvar</button>
+      <span class="save-ok" id="save-ok">✔ Salvo!</span>
+    </div>
+  </div>
+
+  <!-- ── EQUIPE (GESTOR) ── -->
+  <div class="main" id="tab-mgr-panel" style="display:none;">
+    <div class="month-nav">
+      <button onclick="changeMonthMgr(-1)">‹</button>
+      <div class="cur" id="mgr-month-label">—</div>
+      <button onclick="changeMonthMgr(1)">›</button>
+    </div>
+    <div class="section-label">Resumo da Equipe</div>
+    <div class="mgr-summary" id="mgr-summary"></div>
+    <div class="section-label">Vendedores</div>
+    <div class="manager-grid" id="mgr-grid"></div>
+  </div>
+
+  <!-- ── USUÁRIOS (ADMIN) ── -->
+  <div class="main" id="tab-adm-panel" style="display:none;">
+    <div class="section-label">Gerenciar Usuários</div>
+    <div class="table-wrap">
+      <div class="table-head-row"><div class="table-title">Usuários Cadastrados</div></div>
+      <table class="users-table">
+        <thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Ação</th></tr></thead>
+        <tbody id="users-body"></tbody>
+      </table>
+    </div>
+    <div class="add-user-form">
+      <h4>+ Adicionar Usuário</h4>
+      <div class="add-user-grid">
+        <div class="fg"><label>Nome</label><input type="text" id="nu-name" placeholder="Nome completo"></div>
+        <div class="fg"><label>E-mail</label><input type="email" id="nu-email" placeholder="ex: carla"></div>
+        <div class="fg"><label>Senha</label><input type="password" id="nu-pass" placeholder="Mínimo 6 caracteres"></div>
+        <div class="fg"><label>Perfil</label>
+          <select id="nu-perfil">
+            <option value="vendedor">Vendedor</option>
+            <option value="gestor">Gestor</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn-save" onclick="addUser()">➕ Criar Usuário</button>
+      <span class="save-ok" id="nu-ok">✔ Usuário criado!</span>
+      <div class="error-box" id="nu-err" style="display:none;margin-top:10px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ MODAL VENDEDOR ══════════ -->
+<div class="modal-bg" id="seller-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="modal-title">—</h2>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<!-- ══════════ FIREBASE SDK ══════════ -->
+<script type="module">
+// ═══════════════════════════════════════════════════
+//  🔧 COLE SUA CONFIGURAÇÃO DO FIREBASE AQUI
+//  (Substitua TODO o objeto abaixo pelo seu)
+// ═══════════════════════════════════════════════════
+const firebaseConfig = {
+  apiKey: "AIzaSyCa7zrEmbsDX9ZbSInIp79QaGxkNLyZwrs",
+  authDomain: "planilha-consultores-idealize.firebaseapp.com",
+  projectId: "planilha-consultores-idealize",
+  storageBucket: "planilha-consultores-idealize.firebasestorage.app",
+  messagingSenderId: "675104274031",
+  appId: "1:675104274031:web:97c3fe25c301fc8dffff9a",
+  measurementId: "G-V0Y4PLHV7K"
+};
+// ═══════════════════════════════════════════════════
+
+import { initializeApp }              from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword, onAuthStateChanged }
+                                      from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, getDocs, collection, deleteDoc, query, where }
+                                      from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+
+const app  = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db   = getFirestore(app);
+
+// ─── STATE ───────────────────────────────────────
+let currentUser   = null;
+let currentProfile= null;
+let currentYear   = new Date().getFullYear();
+let currentMonth  = new Date().getMonth();
+let mgrYear       = new Date().getFullYear();
+let mgrMonth      = new Date().getMonth();
+let monthData     = {};
+let monthCfg      = { meta: 55000, ciclo: 26 };
+let allUsers      = [];
+
+const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+function pad(n){ return String(n).padStart(2,'0'); }
+
+// Retorna a data de referência considerando a regra das 11h:
+// Antes das 11h → o "dia de referência" é ontem (pode lançar o dia anterior)
+// A partir das 11h → o "dia de referência" é hoje
+function refDateStr() {
+  const now = new Date();
+  if (now.getHours() < 11) {
+    const yest = new Date(now);
+    yest.setDate(yest.getDate() - 1);
+    return `${yest.getFullYear()}-${pad(yest.getMonth()+1)}-${pad(yest.getDate())}`;
+  }
+  return todayStr();
+}
+
+// Verifica se o lastUpdate cobre o período exigido (hoje ou ontem antes das 11h)
+function isUpdatedOnTime(lastUpdate) {
+  if (!lastUpdate) return false;
+  const now = new Date();
+  const tStr = todayStr();
+  // Lançou hoje → sempre ok
+  if (lastUpdate === tStr) return true;
+  // Antes das 11h → ontem também vale
+  if (now.getHours() < 11) {
+    const yest = new Date(now);
+    yest.setDate(yest.getDate() - 1);
+    const yStr = `${yest.getFullYear()}-${pad(yest.getMonth()+1)}-${pad(yest.getDate())}`;
+    if (lastUpdate === yStr) return true;
+  }
+  return false;
+}
+
+// Texto explicativo do status de atualização
+function updateStatusLabel(lastUpdate) {
+  const now = new Date();
+  if (!lastUpdate) return 'Nunca atualizado';
+  const tStr = todayStr();
+  if (lastUpdate === tStr) return 'Atualizado hoje';
+  if (now.getHours() < 11) {
+    const yest = new Date(now);
+    yest.setDate(yest.getDate() - 1);
+    const yStr = `${yest.getFullYear()}-${pad(yest.getMonth()+1)}-${pad(yest.getDate())}`;
+    if (lastUpdate === yStr) return 'Atualizado ontem ✓';
+  }
+  return `Últ: ${lastUpdate.split('-').reverse().join('/')}`;
+}
+function monthKey(y,m){ return `${y}-${pad(m+1)}`; }
+function daysInMonth(y,m){ return new Date(y,m+1,0).getDate(); }
+function fmtBRL(v){ return Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
+
+// ─── AUTH STATE ──────────────────────────────────
+onAuthStateChanged(auth, async user => {
+  if (user) {
+    currentUser = user;
+    const snap = await getDoc(doc(db,'usuarios',user.uid));
+    if (snap.exists()) {
+      const data = snap.data();
+      currentProfile = data.perfil || 'vendedor';
+      document.getElementById('t-name').textContent = data.nome || user.email;
+    } else {
+      currentProfile = 'vendedor';
+      document.getElementById('t-name').textContent = user.email;
+    }
+    document.getElementById('screen-login').classList.remove('active');
+    document.getElementById('screen-app').classList.add('active');
+    if (currentProfile === 'gestor') {
+      document.getElementById('tab-mgr').style.display = '';
+      document.getElementById('tab-adm').style.display = '';
+    }
+    await loadMonthData();
+    renderAll();
+  } else {
+    currentUser = null;
+    document.getElementById('screen-login').classList.add('active');
+    document.getElementById('screen-app').classList.remove('active');
+  }
+});
+
+// ─── LOGIN / LOGOUT ──────────────────────────────
+// Converte usuário simples para e-mail interno
+// Ex: "diego" → "diego@vendamax.app"
+function toEmail(input) {
+  const v = input.trim().toLowerCase();
+  return v.includes('@') ? v : v + '@vendamax.app';
+}
+
+window.doLogin = async function() {
+  const raw   = document.getElementById('l-email').value.trim();
+  const email = toEmail(raw);
+  const pass  = document.getElementById('l-pass').value;
+  const err   = document.getElementById('l-error');
+  const load  = document.getElementById('l-loading');
+  err.style.display  = 'none';
+  load.style.display = 'block';
+  try {
+    // Usa REST API diretamente para evitar bloqueio do reCAPTCHA Enterprise
+    const apiKey = firebaseConfig.apiKey;
+    const res = await fetch(
+      'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' + apiKey,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: pass, returnSecureToken: true })
+      }
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      const msg = data.error?.message || 'ERRO_DESCONHECIDO';
+      throw new Error(msg);
+    }
+    // Login bem sucedido via REST — agora faz login no SDK também para o Firestore funcionar
+    await signInWithEmailAndPassword(auth, email, pass).catch(() => {});
+  } catch(e) {
+    load.style.display = 'none';
+    err.textContent = 'Erro: ' + (e.message || JSON.stringify(e));
+    err.style.display = 'block';
+  }
+};
+
+window.doLogout = async function() {
+  await signOut(auth);
+  document.getElementById('screen-login').classList.add('active');
+  document.getElementById('screen-app').classList.remove('active');
+  document.getElementById('tab-mgr').style.display = 'none';
+  document.getElementById('tab-adm').style.display = 'none';
+  switchTab('meu');
+};
+
+document.getElementById('l-pass').addEventListener('keydown', e => {
+  if (e.key === 'Enter') window.doLogin();
+});
+
+// ─── TABS ────────────────────────────────────────
+window.switchTab = function(tab) {
+  ['meu','mgr','adm'].forEach(t => {
+    document.getElementById(`tab-${t}`).classList.toggle('active', t === tab);
+    const p = document.getElementById(`tab-${t}-panel`);
+    if(p) p.style.display = t === tab ? 'block' : 'none';
+  });
+  if (tab === 'mgr') { mgrYear = new Date().getFullYear(); mgrMonth = new Date().getMonth(); renderManager(); }
+  if (tab === 'adm') renderUsers();
+};
+
+// ─── DATA LOADING ─────────────────────────────────
+async function loadMonthData() {
+  if (!currentUser) return;
+  const key = monthKey(currentYear, currentMonth);
+  const snap = await getDoc(doc(db,'lancamentos',`${currentUser.uid}_${key}`));
+  if (snap.exists()) {
+    const raw = snap.data();
+    monthData = raw.dias || {};
+    monthCfg  = { meta: raw.meta||55000, ciclo: raw.ciclo||26 };
+  } else {
+    monthData = {};
+    monthCfg  = { meta:55000, ciclo:26 };
+  }
+}
+
+async function saveMonthData() {
+  if (!currentUser) return;
+  const key = monthKey(currentYear, currentMonth);
+  await setDoc(doc(db,'lancamentos',`${currentUser.uid}_${key}`), {
+    uid:   currentUser.uid,
+    mes:   key,
+    dias:  monthData,
+    meta:  monthCfg.meta,
+    ciclo: monthCfg.ciclo,
+    lastUpdate: todayStr()
+  });
+}
+
+// ─── MONTH NAV ───────────────────────────────────
+window.changeMonth = async function(dir) {
+  currentMonth += dir;
+  if (currentMonth < 0)  { currentMonth=11; currentYear--; }
+  if (currentMonth > 11) { currentMonth=0;  currentYear++; }
+  await loadMonthData();
+  renderAll();
+};
+
+window.changeMonthMgr = function(dir) {
+  mgrMonth += dir;
+  if (mgrMonth < 0)  { mgrMonth=11; mgrYear--; }
+  if (mgrMonth > 11) { mgrMonth=0;  mgrYear++; }
+  renderManager();
+};
+
+// ─── RENDER ALL ──────────────────────────────────
+function renderAll() {
+  document.getElementById('month-label').textContent = `${MONTHS[currentMonth]} ${currentYear}`;
+  const days   = daysInMonth(currentYear, currentMonth);
+  const today  = new Date();
+  const isCur  = today.getFullYear()===currentYear && today.getMonth()===currentMonth;
+  const todayD = today.getDate();
+
+  let totV=0, totQ=0, totC=0, daysWork=0, daysMeta=0;
+  for(let d=1;d<=days;d++){
+    const e=monthData[d];
+    if(e && e.v>0){ totV+=e.v||0; totQ+=e.q||0; totC+=e.c||0; daysWork++; }
+  }
+
+  const meta     = monthCfg.meta  || 55000;
+  const ciclo    = monthCfg.ciclo || 26;
+  const daysRem  = Math.max(0, ciclo - daysWork);
+  const metaDia  = daysRem>0 ? (meta-totV)/daysRem : 0;
+  const ticket   = totQ>0 ? totV/totQ : 0;
+  const pct      = meta>0 ? totV/meta*100 : 0;
+  const projecao = daysWork>0 ? (totV/daysWork)*ciclo : 0;
+  const dailyTgt = meta/ciclo;
+
+  for(let d=1;d<=days;d++){
+    const e=monthData[d];
+    if(e && e.v>0 && e.v>=dailyTgt) daysMeta++;
+  }
+
+  // update status — regra das 11h:
+  // antes das 11h → lançamento de ontem também conta como ok
+  // a partir das 11h → só conta lançamento de hoje
+  const lastUpd = window._lastUpdate || null;
+  const updOk = isCur && isUpdatedOnTime(lastUpd);
+  const pill  = document.getElementById('upd-pill');
+  pill.className = `update-pill ${updOk?'ok':'late'}`;
+  document.getElementById('upd-label').textContent = isCur
+    ? updateStatusLabel(lastUpd)
+    : (lastUpd ? `Últ: ${lastUpd.split('-').reverse().join('/')}` : 'Nunca atualizado');
+
+  // score
+  const expDays    = isCur ? Math.min(todayD, ciclo) : ciclo;
+  const fillScore  = Math.min(5, Math.round((daysWork/Math.max(1,expDays))*5));
+  const metaScore  = Math.min(3, Math.round((daysMeta/Math.max(1,daysWork))*3));
+  const todayScore = (isCur && updOk) ? 2 : 0;
+  const totalScore = fillScore + metaScore + todayScore;
+
+  document.getElementById('sc-num').textContent = totalScore;
+  document.getElementById('sb-fill').textContent  = `${daysWork}/${expDays}`;
+  document.getElementById('sb-meta').textContent   = `${daysMeta} dia(s)`;
+  document.getElementById('sb-today').textContent  = isCur ? (updOk?'✓ Sim':'✗ Não') : '—';
+  document.getElementById('score-period').textContent = `${MONTHS[currentMonth]} ${currentYear}`;
+
+  const vEl = document.getElementById('sc-verdict');
+  if(totalScore>=8){ vEl.textContent='🌟 Excelente'; vEl.className='verdict v-great'; }
+  else if(totalScore>=5){ vEl.textContent='👍 Regular'; vEl.className='verdict v-ok'; }
+  else { vEl.textContent='⚠️ Atenção'; vEl.className='verdict v-bad'; }
+
+  // progress
+  const pctF = Math.min(pct,100).toFixed(1);
+  document.getElementById('p-pct').textContent     = `${pctF}%`;
+  document.getElementById('p-bar').style.width     = `${Math.min(pct,100)}%`;
+  document.getElementById('p-vendido').textContent = `Vendido: ${fmtBRL(totV)}`;
+  document.getElementById('p-meta').textContent    = `Meta: ${fmtBRL(meta)}`;
+
+  // KPIs
+  const kpis=[
+    {l:'Total Vendas',    v:fmtBRL(totV),    s:`${totQ} vendas`,          badge:pct>=100?'✓ Meta':pctF+'%', bc:pct>=100?'bg-green':pct>=70?'bg-yellow':'bg-red'},
+    {l:'Meta Mensal',     v:fmtBRL(meta),    s:`Ciclo: ${ciclo} dias`},
+    {l:'Meta Diária',     v:fmtBRL(metaDia>0?metaDia:0), s:`${daysRem} dias restantes`},
+    {l:'Ticket Médio',    v:fmtBRL(ticket),  s:`${totQ} vendas`},
+    {l:'Comissão Total',  v:fmtBRL(totC),    s:totV>0?`${(totC/totV*100).toFixed(1)}% das vendas`:'—'},
+    {l:'Dias Trabalhados',v:daysWork,         s:`de ${ciclo} no ciclo`},
+    {l:'Projeção Mês',    v:fmtBRL(projecao),s:'Na velocidade atual', badge:projecao>=meta?'▲ Acima':'▼ Abaixo', bc:projecao>=meta?'bg-green':'bg-red'},
+    {l:'Nota',            v:`${totalScore}/10`, s:['Atenção','Atenção','Atenção','Atenção','Atenção','Regular','Regular','Regular','Excelente','Excelente','Excelente'][totalScore], badge:totalScore>=8?'🌟':totalScore>=5?'👍':'⚠️', bc:totalScore>=8?'bg-green':totalScore>=5?'bg-yellow':'bg-red'},
+  ];
+  document.getElementById('kpi-grid').innerHTML = kpis.map(k=>`
+    <div class="kpi-card">
+      <div class="kpi-lbl">${k.l}</div>
+      <div class="kpi-val">${k.v}</div>
+      ${k.s?`<div class="kpi-sub">${k.s}</div>`:''}
+      ${k.badge?`<div class="kpi-badge ${k.bc}">${k.badge}</div>`:''}
+    </div>`).join('');
+
+  // table
+  const tbody = document.getElementById('t-body');
+  tbody.innerHTML='';
+  const WD=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  for(let d=1;d<=days;d++){
+    const e=monthData[d]||{};
+    const wd=WD[new Date(currentYear,currentMonth,d).getDay()];
+    const ds=`${pad(d)}/${pad(currentMonth+1)}`;
+    const v=e.v||0, q=e.q||0, c=e.c||0, tm=q>0?v/q:0;
+    const isT=isCur&&d===todayD;
+    const filled=v>0;
+    let stHtml='';
+    if(filled){ stHtml=v>=dailyTgt?'<span style="color:var(--green);font-size:10px;">✔ Meta OK</span>':'<span style="color:var(--yellow);font-size:10px;">⚡ Parcial</span>'; }
+    else if(isCur&&d<todayD){ stHtml='<span style="color:var(--red);font-size:10px;">✗ Vazio</span>'; }
+    else { stHtml='<span style="color:var(--muted);font-size:10px;">—</span>'; }
+    tbody.innerHTML+=`<tr class="${isT?'td-today':''}">
+      <td>${wd}${isT?' ◀':''}</td>
+      <td>${ds}</td>
+      <td class="${filled?'td-hi':'td-zero'}">${filled?fmtBRL(v):'—'}</td>
+      <td class="${q>0?'td-hi':'td-zero'}">${q>0?q:'—'}</td>
+      <td class="${c>0?'td-hi':'td-zero'}">${c>0?fmtBRL(c):'—'}</td>
+      <td class="td-zero">${tm>0?fmtBRL(tm):'—'}</td>
+      <td>${stHtml}</td>
+    </tr>`;
+  }
+
+  // form defaults
+  document.getElementById('f-meta').value  = monthCfg.meta  || '';
+  document.getElementById('f-ciclo').value = monthCfg.ciclo || '';
+}
+
+// ─── FORM ────────────────────────────────────────
+window.loadDay = function() {
+  const d=parseInt(document.getElementById('f-day').value);
+  if(!d||d<1||d>31) return;
+  const e=monthData[d]||{};
+  document.getElementById('f-vend').value = e.v||'';
+  document.getElementById('f-qtd').value  = e.q||'';
+  document.getElementById('f-com').value  = e.c||'';
+};
+
+window.saveDay = async function() {
+  const d=parseInt(document.getElementById('f-day').value);
+  if(!d||d<1||d>31){ alert('Informe um dia válido (1-31).'); return; }
+  monthData[d]={ v:parseFloat(document.getElementById('f-vend').value)||0,
+                 q:parseInt(document.getElementById('f-qtd').value)||0,
+                 c:parseFloat(document.getElementById('f-com').value)||0 };
+  const nm=parseFloat(document.getElementById('f-meta').value);
+  const nc=parseInt(document.getElementById('f-ciclo').value);
+  if(nm>0) monthCfg.meta=nm;
+  if(nc>0) monthCfg.ciclo=nc;
+  await saveMonthData();
+  window._lastUpdate = todayStr();
+  const fb=document.getElementById('save-ok');
+  fb.classList.add('show');
+  setTimeout(()=>fb.classList.remove('show'),2500);
+  renderAll();
+};
+
+// ─── MANAGER PANEL ───────────────────────────────
+async function renderManager() {
+  document.getElementById('mgr-month-label').textContent = `${MONTHS[mgrMonth]} ${mgrYear}`;
+  const key = monthKey(mgrYear, mgrMonth);
+
+  // load all users
+  const uSnap = await getDocs(collection(db,'usuarios'));
+  allUsers = [];
+  uSnap.forEach(d=>allUsers.push({uid:d.id,...d.data()}));
+  const sellers = allUsers.filter(u=>u.perfil==='vendedor');
+
+  // load all lancamentos for this month
+  const lSnap = await getDocs(query(collection(db,'lancamentos'),where('mes','==',key)));
+  const lMap = {};
+  lSnap.forEach(d=>{ lMap[d.data().uid]=d.data(); });
+
+  let totalEquipe=0, totalAtualHoje=0, totalMetaAtingida=0;
+
+  const cards = sellers.map(u=>{
+    const l = lMap[u.uid]||{};
+    const dias = l.dias||{};
+    const meta = l.meta||55000;
+    const ciclo= l.ciclo||26;
+    const days = daysInMonth(mgrYear,mgrMonth);
+    let totV=0,totQ=0,dW=0,dM=0;
+    const dailyT=meta/ciclo;
+    for(let d=1;d<=days;d++){
+      const e=dias[d];
+      if(e&&e.v>0){ totV+=e.v; totQ+=e.q||0; dW++; if(e.v>=dailyT)dM++; }
+    }
+    const updOk = isCur && isUpdatedOnTime(l.lastUpdate);
+    const pct   = meta>0?totV/meta*100:0;
+    const today  = new Date();
+    const isCur  = today.getFullYear()===mgrYear && today.getMonth()===mgrMonth;
+    const expD   = isCur?Math.min(today.getDate(),ciclo):ciclo;
+    const fillSc = Math.min(5,Math.round((dW/Math.max(1,expD))*5));
+    const metaSc = Math.min(3,Math.round((dM/Math.max(1,dW))*3));
+    const todSc  = (isCur&&updOk)?2:0;
+    const score  = fillSc+metaSc+todSc;
+
+    totalEquipe    += totV;
+    if(updOk)        totalAtualHoje++;
+    if(pct>=100)     totalMetaAtingida++;
+
+    return { u, totV, totQ, meta, pct, score, updOk, dW, ciclo };
+  });
+
+  // summary
+  document.getElementById('mgr-summary').innerHTML=[
+    {l:'Total Equipe',     v:fmtBRL(totalEquipe),                  s:`${sellers.length} vendedores`},
+    {l:'Atualizaram Hoje', v:`${totalAtualHoje}/${sellers.length}`, s:'preencheram hoje'},
+    {l:'Bateram a Meta',   v:`${totalMetaAtingida}/${sellers.length}`, s:'no mês atual'},
+    {l:'Média de Nota',    v:sellers.length>0?(cards.reduce((a,c)=>a+c.score,0)/sellers.length).toFixed(1)+'/10':'—', s:'preenchimento'},
+  ].map(k=>`<div class="mgr-kpi"><div class="mk-l">${k.l}</div><div class="mk-v">${k.v}</div><div class="mk-s">${k.s}</div></div>`).join('');
+
+  // cards
+  document.getElementById('mgr-grid').innerHTML = cards.map(({u,totV,totQ,meta,pct,score,updOk,dW,ciclo})=>`
+    <div class="seller-card" onclick="openSellerModal('${u.uid}','${u.nome||u.email}','${monthKey(mgrYear,mgrMonth)}')">
+      <div class="seller-upd ${updOk?'upd-ok':'upd-late'}"></div>
+      <div class="seller-top">
+        <div class="seller-avatar">${(u.nome||u.email||'?')[0].toUpperCase()}</div>
+        <div class="seller-info">
+          <div class="seller-name">${u.nome||'—'}</div>
+          <div class="seller-email">${u.email||'—'}</div>
+        </div>
+        <div class="seller-score"><div class="n">${score}</div><div class="d">/10</div></div>
+      </div>
+      <div class="seller-stats">
+        <div class="ss-item"><div class="ss-val">${fmtBRL(totV)}</div><div class="ss-lbl">Vendido</div></div>
+        <div class="ss-item"><div class="ss-val">${pct.toFixed(0)}%</div><div class="ss-lbl">Da meta</div></div>
+        <div class="ss-item"><div class="ss-val">${dW}/${ciclo}</div><div class="ss-lbl">Dias</div></div>
+      </div>
+      <div class="seller-bar"><div class="seller-bar-fill" style="width:${Math.min(pct,100)}%"></div></div>
+    </div>`).join('');
+}
+
+// ─── SELLER MODAL ────────────────────────────────
+window.openSellerModal = async function(uid, nome, mesKey) {
+  document.getElementById('modal-title').textContent = nome;
+  document.getElementById('seller-modal').classList.add('open');
+  document.getElementById('modal-body').innerHTML='<p style="color:var(--muted);font-family:DM Mono,monospace;font-size:12px;">Carregando...</p>';
+
+  const snap = await getDoc(doc(db,'lancamentos',`${uid}_${mesKey}`));
+  if(!snap.exists()){ document.getElementById('modal-body').innerHTML='<p style="color:var(--muted2);">Sem dados para este mês.</p>'; return; }
+  const data = snap.data();
+  const dias  = data.dias||{};
+  const meta  = data.meta||55000;
+  const ciclo = data.ciclo||26;
+  const days  = daysInMonth(parseInt(mesKey.split('-')[0]),parseInt(mesKey.split('-')[1])-1);
+  const daily = meta/ciclo;
+  const WD    = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  const [y,m] = mesKey.split('-').map(Number);
+
+  let rows='';
+  for(let d=1;d<=days;d++){
+    const e=dias[d]||{};
+    const v=e.v||0,q=e.q||0,c=e.c||0;
+    const wd=WD[new Date(y,m-1,d).getDay()];
+    rows+=`<tr>
+      <td style="color:var(--muted2)">${wd} ${pad(d)}</td>
+      <td class="${v>0?'td-hi':'td-zero'}">${v>0?fmtBRL(v):'—'}</td>
+      <td class="td-zero">${q||'—'}</td>
+      <td class="${v>=daily&&v>0?'td-hi':'td-zero'}">${v>0?(v>=daily?'✔ OK':'⚡'):'—'}</td>
+    </tr>`;
+  }
+
+  document.getElementById('modal-body').innerHTML=`
+    <p style="font-size:12px;font-family:DM Mono,monospace;color:var(--muted2);margin-bottom:16px;">
+      Meta: ${fmtBRL(meta)} · Ciclo: ${ciclo} dias · Últ. atualização: ${data.lastUpdate||'—'}
+    </p>
+    <table style="width:100%;border-collapse:collapse;">
+      <thead><tr>
+        <th style="padding:8px;text-align:left;font-size:9px;font-family:DM Mono,monospace;letter-spacing:2px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);">Dia</th>
+        <th style="padding:8px;text-align:left;font-size:9px;font-family:DM Mono,monospace;letter-spacing:2px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);">Vendas</th>
+        <th style="padding:8px;text-align:left;font-size:9px;font-family:DM Mono,monospace;letter-spacing:2px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);">Qtd</th>
+        <th style="padding:8px;text-align:left;font-size:9px;font-family:DM Mono,monospace;letter-spacing:2px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);">Status</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+};
+
+window.closeModal = function(){ document.getElementById('seller-modal').classList.remove('open'); };
+document.getElementById('seller-modal').addEventListener('click', e=>{ if(e.target===e.currentTarget) window.closeModal(); });
+
+// ─── USERS PANEL ─────────────────────────────────
+async function renderUsers() {
+  const snap = await getDocs(collection(db,'usuarios'));
+  let rows='';
+  snap.forEach(d=>{
+    const u=d.data();
+    rows+=`<tr>
+      <td>${u.nome||'—'}</td>
+      <td style="font-family:DM Mono,monospace;font-size:11px;">${u.email||'—'}</td>
+      <td><span class="badge-perfil ${u.perfil==='gestor'?'bp-gestor':'bp-vendedor'}">${u.perfil||'vendedor'}</span></td>
+      <td><button class="btn-del" onclick="delUser('${d.id}')">Remover</button></td>
+    </tr>`;
+  });
+  document.getElementById('users-body').innerHTML=rows||'<tr><td colspan="4" style="color:var(--muted);font-size:12px;font-family:DM Mono,monospace;padding:16px;">Nenhum usuário cadastrado.</td></tr>';
+}
+
+window.addUser = async function() {
+  const nome  = document.getElementById('nu-name').value.trim();
+  const emailRaw = document.getElementById('nu-email').value.trim();
+  const email = toEmail(emailRaw);
+  const pass  = document.getElementById('nu-pass').value;
+  const perf  = document.getElementById('nu-perfil').value;
+  const errEl = document.getElementById('nu-err');
+  const okEl  = document.getElementById('nu-ok');
+  errEl.style.display='none';
+  if(!nome||!email||!pass){ errEl.textContent='Preencha todos os campos.'; errEl.style.display='block'; return; }
+  if(pass.length<6){ errEl.textContent='Senha mínimo 6 caracteres.'; errEl.style.display='block'; return; }
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, email, pass);
+    await setDoc(doc(db,'usuarios',cred.user.uid),{ nome, email, perfil:perf });
+    // sign back in as current user (creating user changes auth state)
+    okEl.classList.add('show');
+    setTimeout(()=>okEl.classList.remove('show'),2500);
+    document.getElementById('nu-name').value='';
+    document.getElementById('nu-email').value='';
+    document.getElementById('nu-pass').value='';
+    renderUsers();
+  } catch(e) {
+    errEl.textContent = e.code==='auth/email-already-in-use'?'E-mail já cadastrado.':'Erro: '+e.message;
+    errEl.style.display='block';
+  }
+};
+
+window.delUser = async function(uid) {
+  if(!confirm('Remover este usuário do banco de dados? (O login no Firebase deve ser removido manualmente no Console)')) return;
+  await deleteDoc(doc(db,'usuarios',uid));
+  renderUsers();
+};
+
+// ─── INIT CHECK lastUpdate ────────────────────────
+async function initLastUpdate() {
+  if(!currentUser) return;
+  const key = monthKey(currentYear,currentMonth);
+  const snap = await getDoc(doc(db,'lancamentos',`${currentUser.uid}_${key}`));
+  if(snap.exists()) window._lastUpdate = snap.data().lastUpdate || null;
+}
+// called after auth resolves in onAuthStateChanged above
+
+</script>
+</body>
+</html>
