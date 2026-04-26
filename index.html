@@ -695,7 +695,30 @@ window.doLogin = async function() {
       throw new Error(msg);
     }
     // Login bem sucedido via REST — agora faz login no SDK também para o Firestore funcionar
-    await signInWithEmailAndPassword(auth, email, pass).catch(() => {});
+    try {
+      await signInWithEmailAndPassword(auth, email, pass);
+    } catch(e2) {
+      // Se o SDK falhar mas REST funcionou, carrega manualmente
+      load.style.display = 'none';
+      currentUser = { uid: data.localId, email: data.email };
+      const snap = await getDoc(doc(db,'usuarios', data.localId));
+      if (snap.exists()) {
+        const udata = snap.data();
+        currentProfile = udata.perfil || 'vendedor';
+        document.getElementById('t-name').textContent = udata.nome || data.email;
+      } else {
+        currentProfile = 'vendedor';
+        document.getElementById('t-name').textContent = data.email;
+      }
+      document.getElementById('screen-login').classList.remove('active');
+      document.getElementById('screen-app').classList.add('active');
+      if (currentProfile === 'gestor') {
+        document.getElementById('tab-mgr').style.display = '';
+        document.getElementById('tab-adm').style.display = '';
+      }
+      await loadMonthData();
+      renderAll();
+    }
   } catch(e) {
     load.style.display = 'none';
     err.textContent = 'Erro: ' + (e.message || JSON.stringify(e));
